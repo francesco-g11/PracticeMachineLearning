@@ -1,0 +1,98 @@
+---
+title: "Practice machine learning"
+author: "Francesco Giumetti"
+date: "15 marzo 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+### Overview
+This document describe the analysis for course project of assignment of *Practical Machine Learning* course. Using data coming from wearable devices such as Jawbone Up, Nike FuelBand, and Fitbit, the goal is to predict the manner in which partecipants did the exercise. The outcome is a class variable (A, B, C, D, E) while the predictors are numerical data (acceleration, roll, pitch, ...)
+
+
+### Initial settings
+Disabling warining, setting seed for reproducibility and loading the caret library to work with prediction models
+```{r results='hide'}
+options(warn = -1)
+set.seed(54321)
+library(caret)
+```
+
+
+### Loading data & preliminary checks
+
+Assuming use the default destination folder
+```{r results='hide'}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv","pml-training.csv")
+```
+
+Load and explore the training dataset
+```{r results='hide'}
+dt <- read.csv("pml-training.csv")
+str(dt)
+summary(dt)
+#results disabled to avoid verbosity
+```
+
+### Data cleansing
+
+Some data are not useful or need to be fixed, because
+
+1. some columns have *division by zero* cases
+2. some columns are interpretated as *factor* instead of *numeric*
+3. some columns are fully *NA*
+4. some columns are not good canditate to be predictors by their nature (X, username, timestamps, windows)
+
+
+So, to fix the point 1, we reload data marking #DIV/0! as NA
+```{r}
+dt <- read.csv("pml-training.csv",na.strings = c("#DIV/0!"))
+```
+
+To fix point 2, we convert all 53 numeric columns to *numeric*, except the first seven (not useful) and the last one (the outcome)
+```{r}
+for(i in c(8:ncol(dt)-1)) {dt[,i] = as.numeric(as.character(dt[,i]))}
+```
+
+As fixing the point 3, we tear off the fully-NA columns
+```{r}
+cx <- colnames(dt[colSums(is.na(dt))==0])
+dt <- dt[cx]
+```
+
+Finally (point 4), we exlude the first 7 columns
+```{r}
+dt <- dt[,-c(1,2,3,4,5,6,7)]
+```
+
+
+### Start prediction phase
+Creating a training and probing subset, with 30% for testing
+```{r}
+inTrain <- createDataPartition(y=dt$classe,p=0.7,list=FALSE)
+training <- dt[inTrain,]
+testing <- dt[-inTrain,]
+```
+
+Creating a model using random forest method, thinking it is the most suitable to predict a class result. The outcome *classe* is considered as function of *all* other predictors
+```{r}
+mdl <- train(classe~.,data=training,method="rf")
+```
+Then applying the model to the training set and the probing set
+```{r}
+prtrain <- predict(mdl,newdata=training)
+prtest <- predict(mdl,newdata=testing)
+```
+Finally we generate the confusion matrix to evaluate the accuracy, sensitivity and specificity with training set
+```{r}
+confusionMatrix(prtrain,training$classe)
+```
+and probing set
+```{r}
+confusionMatrix(prtest,testing$classe)
+```
+As result of confusion matrix, the model denotes good results for all values about accuracy specificity and sensitivity. When applied to the testing set the overall accuracy is 0.994 and the minimum value is sensitivity for class C = 0.990  
+
+The model efficiency has been also confirmed by applying it to the final evaluation 20-case set, giving a score of 20/20.
